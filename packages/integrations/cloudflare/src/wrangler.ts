@@ -28,7 +28,7 @@ export function cloudflareConfigCustomizer(
 	options?: CloudflareConfigOptions,
 ): (config: Partial<WorkerConfig>) => Partial<WorkerConfig> {
 	const sessionKVBindingName = options?.sessionKVBindingName ?? DEFAULT_SESSION_KV_BINDING_NAME;
-	const needsSessionKVBinding = options?.needsSessionKVBinding ?? true;
+	const needsSessionKVBinding = options?.needsSessionKVBinding ?? false;
 	const imagesBindingName =
 		options?.imagesBindingName === false
 			? undefined

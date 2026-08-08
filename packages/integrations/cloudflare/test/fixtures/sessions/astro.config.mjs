@@ -5,4 +5,5 @@ export default defineConfig({
   output: 'server',
   site: `http://example.com`,
   adapter: cloudflare(),
+  session: {},
 });

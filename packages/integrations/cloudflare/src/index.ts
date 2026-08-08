@@ -175,7 +175,7 @@ export default function createIntegration({
 					);
 				}
 
-				if (session !== false && !session?.driver) {
+				if (session && !session?.driver) {
 					logger.info(
 						`Enabling sessions with Cloudflare KV with the "${sessionKVBindingName}" KV binding.`,
 					);

@@ -25,22 +25,29 @@ describe('cloudflareConfigCustomizer', () => {
 	});
 
 	describe('session KV binding', () => {
-		it('adds default SESSION KV binding when none exists', () => {
+		it('does not add SESSION KV binding by default', () => {
 			const customizer = cloudflareConfigCustomizer();
+			const result = customizer({});
+
+			assert.equal(result.kv_namespaces, undefined);
+		});
+
+		it('adds SESSION KV binding when explicitly needed', () => {
+			const customizer = cloudflareConfigCustomizer({ needsSessionKVBinding: true });
 			const result = customizer({});
 
 			assert.deepEqual(result.kv_namespaces, [{ binding: DEFAULT_SESSION_KV_BINDING_NAME }]);
 		});
 
 		it('adds custom SESSION KV binding name when specified', () => {
-			const customizer = cloudflareConfigCustomizer({ sessionKVBindingName: 'MY_SESSION' });
+			const customizer = cloudflareConfigCustomizer({ needsSessionKVBinding: true, sessionKVBindingName: 'MY_SESSION' });
 			const result = customizer({});
 
 			assert.deepEqual(result.kv_namespaces, [{ binding: 'MY_SESSION' }]);
 		});
 
 		it('does not add SESSION binding when one already exists with default name', () => {
-			const customizer = cloudflareConfigCustomizer();
+			const customizer = cloudflareConfigCustomizer({ needsSessionKVBinding: true });
 			const result = customizer({
 				kv_namespaces: [{ binding: DEFAULT_SESSION_KV_BINDING_NAME, id: 'existing-id' }],
 			});
@@ -49,7 +56,7 @@ describe('cloudflareConfigCustomizer', () => {
 		});
 
 		it('does not add SESSION binding when one already exists with custom name', () => {
-			const customizer = cloudflareConfigCustomizer({ sessionKVBindingName: 'MY_SESSION' });
+			const customizer = cloudflareConfigCustomizer({ needsSessionKVBinding: true, sessionKVBindingName: 'MY_SESSION' });
 			const result = customizer({
 				kv_namespaces: [{ binding: 'MY_SESSION', id: 'existing-id' }],
 			});
@@ -62,7 +69,7 @@ describe('cloudflareConfigCustomizer', () => {
 			// list. @cloudflare/vite-plugin merges this with the user's wrangler config,
 			// so returning the user's existing bindings here would duplicate them in the
 			// generated wrangler.json (regression from #16555, see #16590).
-			const customizer = cloudflareConfigCustomizer();
+			const customizer = cloudflareConfigCustomizer({ needsSessionKVBinding: true });
 			const result = customizer({
 				kv_namespaces: [{ binding: 'OTHER_KV', id: 'other-id' }],
 			});
@@ -81,7 +88,7 @@ describe('cloudflareConfigCustomizer', () => {
 			// The output is merged by @cloudflare/vite-plugin with the user's wrangler
 			// config, so echoing the user's bindings here causes them to appear twice in
 			// the generated wrangler.json — exactly the duplication reported in #16590.
-			const customizer = cloudflareConfigCustomizer();
+			const customizer = cloudflareConfigCustomizer({ needsSessionKVBinding: true });
 			const result = customizer({
 				kv_namespaces: [
 					{ binding: 'RATE_LIMIT', id: 'rate-limit-id' },
@@ -148,7 +155,7 @@ describe('cloudflareConfigCustomizer', () => {
 
 	describe('previews', () => {
 		it('adds default bindings to previews when none exist', () => {
-			const customizer = cloudflareConfigCustomizer();
+			const customizer = cloudflareConfigCustomizer({ needsSessionKVBinding: true });
 			const result = customizer({});
 
 			assert.deepEqual(result.previews?.kv_namespaces, [
@@ -158,7 +165,7 @@ describe('cloudflareConfigCustomizer', () => {
 		});
 
 		it('does not add SESSION binding to previews when one exists in previews config', () => {
-			const customizer = cloudflareConfigCustomizer();
+			const customizer = cloudflareConfigCustomizer({ needsSessionKVBinding: true });
 			const result = customizer({
 				previews: {
 					kv_namespaces: [{ binding: DEFAULT_SESSION_KV_BINDING_NAME, id: 'preview-id' }],
@@ -180,7 +187,7 @@ describe('cloudflareConfigCustomizer', () => {
 		});
 
 		it('returns only SESSION binding for previews when other KV bindings exist', () => {
-			const customizer = cloudflareConfigCustomizer();
+			const customizer = cloudflareConfigCustomizer({ needsSessionKVBinding: true });
 			const result = customizer({
 				previews: {
 					kv_namespaces: [{ binding: 'OTHER_KV', id: 'other-id' }],
@@ -193,7 +200,7 @@ describe('cloudflareConfigCustomizer', () => {
 		});
 
 		it('adds SESSION binding to previews even when top-level has it', () => {
-			const customizer = cloudflareConfigCustomizer();
+			const customizer = cloudflareConfigCustomizer({ needsSessionKVBinding: true });
 			const result = customizer({
 				kv_namespaces: [{ binding: DEFAULT_SESSION_KV_BINDING_NAME, id: 'top-level-id' }],
 			});
@@ -219,7 +226,7 @@ describe('cloudflareConfigCustomizer', () => {
 		});
 
 		it('checks previews config independently from top-level config', () => {
-			const customizer = cloudflareConfigCustomizer();
+			const customizer = cloudflareConfigCustomizer({ needsSessionKVBinding: true });
 			const result = customizer({
 				kv_namespaces: [{ binding: DEFAULT_SESSION_KV_BINDING_NAME, id: 'top-level-id' }],
 				images: { binding: 'TOP_LEVEL_IMAGES' },

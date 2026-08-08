@@ -71,8 +71,18 @@ describe('@astrojs/cloudflare session: false', () => {
 		);
 	});
 
-	it('still wires Cloudflare KV by default', async () => {
+	it('does not wire Cloudflare KV when session is unconfigured', async () => {
 		const { session, logs } = await runConfigSetup(undefined);
+		assert.equal(session, undefined, 'expected no session driver when session is unconfigured');
+		assert.equal(
+			logs.some((message) => message.includes('Enabling sessions')),
+			false,
+			'the adapter should not announce that it enabled sessions',
+		);
+	});
+
+	it('wires Cloudflare KV when session is explicitly configured', async () => {
+		const { session, logs } = await runConfigSetup({});
 		assert.ok(session?.driver, 'expected the default KV driver to be wired');
 		assert.equal(
 			logs.some((message) => message.includes('Enabling sessions with Cloudflare KV')),
