@@ -1,6 +1,7 @@
 import * as assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
+import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -10,6 +11,8 @@ import {
 	serializeLockFile,
 	evaluateExistingServer,
 	killDevServer,
+	checkExistingServer,
+	isPortListening,
 	writeLockFile,
 	readLockFile,
 	isProcessAlive,
@@ -236,6 +239,77 @@ describe('killDevServer', () => {
 
 		assert.equal(isProcessAlive(pid), false);
 		assert.equal(readLockFile(root), null);
+	});
+});
+// #endregion
+
+// #region isPortListening
+describe('isPortListening', () => {
+	it('returns true when a server is listening on the port', async () => {
+		const server = createServer();
+		await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+		const port = (server.address() as import('node:net').AddressInfo).port;
+		try {
+			assert.equal(await isPortListening(port), true);
+		} finally {
+			server.close();
+		}
+	});
+
+	it('returns false when nothing is listening on the port', async () => {
+		assert.equal(await isPortListening(44_401), false);
+	});
+});
+// #endregion
+
+// #region checkExistingServer
+describe('checkExistingServer', () => {
+	let tempDir: string;
+	let root: URL;
+
+	before(() => {
+		tempDir = mkdtempSync(join(tmpdir(), 'astro-lockfile-check-'));
+		root = pathToFileURL(tempDir + '/');
+	});
+
+	after(() => {
+		rmSync(tempDir, { recursive: true, force: true });
+	});
+
+	it('returns null when no lock file exists', async () => {
+		assert.equal(await checkExistingServer(root), null);
+	});
+
+	it('returns null when PID is alive but port is not listening (stale lock file)', async () => {
+		const data: LockFileData = {
+			...validData,
+			pid: process.pid,
+			port: 44_402,
+		};
+		writeLockFile(root, data);
+		const result = await checkExistingServer(root);
+		assert.equal(result, null, 'should treat as stale when PID alive but port not listening');
+		assert.equal(readLockFile(root), null, 'stale lock file should be cleaned up');
+	});
+
+	it('returns lock data when PID is alive and port is listening', async () => {
+		const server = createServer();
+		await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+		const port = (server.address() as import('node:net').AddressInfo).port;
+		try {
+			const data: LockFileData = {
+				...validData,
+				pid: process.pid,
+				port,
+			};
+			writeLockFile(root, data);
+			const result = await checkExistingServer(root);
+			assert.notEqual(result, null);
+			assert.equal(result!.pid, process.pid);
+			assert.equal(result!.port, port);
+		} finally {
+			server.close();
+		}
 	});
 });
 // #endregion

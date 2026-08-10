@@ -1,4 +1,5 @@
 import { existsSync, readFileSync, unlinkSync, writeFileSync, mkdirSync } from 'node:fs';
+import { createConnection } from 'node:net';
 import { fileURLToPath } from 'node:url';
 import type { ResolvedServerUrls } from 'vite';
 
@@ -91,6 +92,34 @@ export function isProcessAlive(pid: number): boolean {
 	} catch {
 		return false;
 	}
+}
+
+/** Maximum time (ms) to wait for a TCP connection to the lock file port. */
+const PORT_CHECK_TIMEOUT = 1000;
+
+/**
+ * Check if something is listening on the given port by attempting a TCP connection.
+ * Guards against PID reuse (e.g. after a Docker container restart): if the PID is alive
+ * but nothing is listening on the recorded port, the lock file is stale.
+ */
+export function isPortListening(port: number): Promise<boolean> {
+	return new Promise((resolve) => {
+		const socket = createConnection({ port, host: '127.0.0.1' });
+		const timer = setTimeout(() => {
+			socket.destroy();
+			resolve(false);
+		}, PORT_CHECK_TIMEOUT);
+		socket.on('connect', () => {
+			clearTimeout(timer);
+			socket.destroy();
+			resolve(true);
+		});
+		socket.on('error', () => {
+			clearTimeout(timer);
+			socket.destroy();
+			resolve(false);
+		});
+	});
 }
 
 /**
@@ -190,18 +219,29 @@ export async function killDevServer(root: URL, data: LockFileData): Promise<void
 /**
  * Check for an existing server by reading the lock file and checking process liveness.
  * Automatically cleans up stale lock files.
+ *
+ * After confirming the PID is alive, a TCP probe to the recorded port guards against
+ * PID reuse (common after Docker container restarts where the lock file persists on a
+ * volume mount but the original process is gone and an unrelated process reuses the PID).
+ *
  * Returns the server info if a live server is found, null otherwise.
  */
-export function checkExistingServer(
+export async function checkExistingServer(
 	root: URL,
 	command: ServerCommand = 'dev',
-): LockFileData | null {
+): Promise<LockFileData | null> {
 	const data = readLockFile(root, command);
 	const result = evaluateExistingServer(data, data !== null && isProcessAlive(data.pid));
 	if (result === null) {
 		return null;
 	}
 	if (result.stale) {
+		removeLockFile(root, command);
+		return null;
+	}
+	// PID is alive — verify the recorded port is actually listening. If it is not,
+	// the PID belongs to an unrelated process (e.g. after a Docker container restart).
+	if (!(await isPortListening(result.data.port))) {
 		removeLockFile(root, command);
 		return null;
 	}
